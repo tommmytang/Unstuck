@@ -4,14 +4,11 @@ import json
 import cohere
 from tavily import TavilyClient
 
-COHERE_KEY = os.getenv("COHERE_API_KEY", "KYrrefNlqXGEs6hZzaX0mSqyrW7EYLfBmhdB7YVA")
-TAVILY_KEY = os.getenv("TAVILY_API_KEY", "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")
-
 MAX_QUESTIONS = 3
 MODEL_NAME = "command-a-03-2025"
 
-co = cohere.Client(COHERE_KEY)
-tavily = TavilyClient(api_key=TAVILY_KEY)
+co = cohere.Client(st.secrets["COHERE_API_KEY"])
+tavily = TavilyClient(api_key=st.secrets["TAVILY_API_KEY"])
 
 # ── Session state init ────────────────────────────────────────────────────────
 if "phase" not in st.session_state:
