@@ -6,3 +6,7 @@ secondaryBackgroundColor = "#EDE8DF"
 textColor                = "#18160F"
 primaryColor             = "#7C7769"
 font                     = "sans serif"
+
+[server]
+runOnSave = true
+watchType = "auto"

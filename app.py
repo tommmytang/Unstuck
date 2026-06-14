@@ -22,6 +22,14 @@ if "phase" not in st.session_state:
     st.session_state.factors = ""
     st.session_state.factors_list = []
     st.session_state.ranked_factors = []
+    st.session_state.intake_target = ""
+    st.session_state.intake_options = []
+    st.session_state.selected_options = []
+
+@st.cache_data(show_spinner=False, ttl=3600) # Caches results for 1 hour
+def fetch_deals(product_name):
+    deal_query = f"{product_name} best price discount buy online"
+    return tavily.search(query=deal_query, search_depth="basic").get("results", [])[:5]
 
 def ask_cohere(prompt, temp=0.3):
     response = co.chat(
@@ -79,7 +87,7 @@ div[data-testid="stToolbar"] { display: none; }
 /* ── Layout ── */
 .block-container {
     max-width: 680px !important;
-    padding: 4.5rem 2.5rem 8rem !important;
+    padding: 2rem 2.5rem 8rem !important;
     margin: 0 auto !important;
 }
 
@@ -284,39 +292,48 @@ div[data-testid="stToolbar"] { display: none; }
     font-weight: 300;
 }
 
-/* ── Choice cards ── */
-.choice-card {
-    padding: 1.6rem 1.75rem;
-    background: var(--paper);
+/* ── Choice cards (3-column selectable grid) ── */
+.choice-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0;
+    margin-bottom: 1.5rem;
     border: 1px solid var(--rule-light);
-    border-top: none;
-    margin-bottom: 0;
+}
+.choice-card {
+    padding: 1.4rem 1.3rem;
+    background: var(--paper);
+    border-right: 1px solid var(--rule-light);
+    cursor: pointer;
     transition: background 0.15s;
     position: relative;
-}
-.choice-card:first-of-type {
-    border-top: 1px solid var(--rule-light);
-}
-.choice-card:hover {
-    background: var(--paper-warm);
-}
-.choice-card-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 1.5rem;
-    margin-bottom: 0.6rem;
-}
-.choice-card-meta {
     display: flex;
     flex-direction: column;
-    gap: 0.35rem;
-    flex: 1;
-    min-width: 0;
+    gap: 0.5rem;
 }
+.choice-card:last-child { border-right: none; }
+.choice-card:hover { background: var(--paper-warm); }
+.choice-card.card-selected {
+    background: var(--ink) !important;
+}
+.choice-card.card-selected .choice-rank,
+.choice-card.card-selected .choice-name,
+.choice-card.card-selected .choice-price,
+.choice-card.card-selected .choice-reason,
+.choice-card.card-selected .choice-detail-label,
+.choice-card.card-selected .choice-detail-row,
+.choice-card.card-selected .stat-label,
+.choice-card.card-selected .stat-value {
+    color: var(--paper) !important;
+}
+.choice-card.card-selected .choice-details,
+.choice-card.card-selected .choice-detail-row {
+    border-color: rgba(247,244,238,0.2) !important;
+}
+.choice-card.card-selected .choice-stats { border-color: rgba(247,244,238,0.2) !important; }
 .choice-rank {
     font-family: 'Martian Mono', monospace !important;
-    font-size: 0.54rem;
+    font-size: 0.52rem;
     letter-spacing: 0.2em;
     text-transform: uppercase;
     color: var(--gold);
@@ -324,72 +341,68 @@ div[data-testid="stToolbar"] { display: none; }
 }
 .choice-name {
     font-family: 'Cormorant Garamond', serif !important;
-    font-size: 1.35rem;
+    font-size: 1.15rem;
     font-weight: 400;
     color: var(--ink);
     margin: 0;
-    line-height: 1.15;
+    line-height: 1.2;
     letter-spacing: -0.01em;
 }
 .choice-price {
     font-family: 'Martian Mono', monospace !important;
-    font-size: 0.78rem;
+    font-size: 0.72rem;
     color: var(--ink-mid);
     font-weight: 300;
     letter-spacing: 0.02em;
-    white-space: nowrap;
-    flex-shrink: 0;
-    padding-top: 0.15rem;
 }
 .choice-reason {
     font-family: 'Cormorant Garamond', serif !important;
     font-style: italic;
-    font-size: 0.95rem;
+    font-size: 0.88rem;
     color: var(--ink-soft);
-    line-height: 1.6;
-    margin: 0 0 1rem;
+    line-height: 1.55;
+    margin: 0;
     font-weight: 300;
 }
 .choice-details {
     display: flex;
     flex-direction: column;
-    gap: 0.45rem;
-    margin-bottom: 1rem;
-    padding-bottom: 1rem;
-    border-bottom: 1px solid var(--rule-light);
+    gap: 0.4rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--rule-light);
+    margin-top: auto;
 }
 .choice-detail-row {
     display: flex;
-    gap: 0.75rem;
-    font-size: 0.82rem;
-    line-height: 1.5;
+    flex-direction: column;
+    gap: 0.15rem;
+    font-size: 0.78rem;
+    line-height: 1.45;
     font-weight: 300;
     color: var(--ink-mid);
 }
 .choice-detail-label {
     font-family: 'Martian Mono', monospace;
-    font-size: 0.5rem;
+    font-size: 0.48rem;
     letter-spacing: 0.15em;
     text-transform: uppercase;
     color: var(--ink-ghost);
-    white-space: nowrap;
-    margin-top: 0.15rem;
-    flex-shrink: 0;
-    min-width: 6.5rem;
 }
 .choice-stats {
     display: flex;
-    gap: 2rem;
-    flex-wrap: wrap;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--rule-light);
 }
 .stat-item {
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
+    gap: 0.1rem;
 }
 .stat-label {
     font-family: 'Martian Mono', monospace !important;
-    font-size: 0.5rem;
+    font-size: 0.48rem;
     letter-spacing: 0.15em;
     text-transform: uppercase;
     color: var(--ink-ghost);
@@ -397,7 +410,7 @@ div[data-testid="stToolbar"] { display: none; }
 }
 .stat-value {
     font-family: 'DM Sans', sans-serif !important;
-    font-size: 0.84rem;
+    font-size: 0.8rem;
     color: var(--ink-mid);
     font-weight: 300;
 }
@@ -604,6 +617,49 @@ div[data-testid="stToolbar"] { display: none; }
     font-weight: 300 !important;
 }
 
+/* ── Preference chips ── */
+.chips-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin: 1.5rem 0 2rem;
+}
+.chip-label {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    padding: 0.6rem 1.1rem;
+    border: 1px solid var(--rule);
+    cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.82rem;
+    font-weight: 300;
+    color: var(--ink-mid);
+    letter-spacing: 0.01em;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
+    user-select: none;
+    background: var(--paper);
+    text-align: center;
+}
+.chip-label:hover {
+    border-color: var(--ink-soft);
+    background: var(--paper-warm);
+}
+.chip-label input[type="checkbox"] { display: none; }
+.chip-label.selected {
+    background: var(--ink) !important;
+    color: var(--paper) !important;
+    border-color: var(--ink) !important;
+}
+.chip-check {
+    font-size: 0.7rem;
+    opacity: 0;
+    transition: opacity 0.1s;
+    flex-shrink: 0;
+}
+.chip-label.selected .chip-check { opacity: 1; }
+
 /* ── Columns ── */
 [data-testid="stHorizontalBlock"] {
     gap: 1rem !important;
@@ -611,9 +667,9 @@ div[data-testid="stToolbar"] { display: none; }
 
 /* ── Splash page ── */
 .splash-hero {
-    padding: 3rem 0 4rem;
+    padding: 1rem 0 2rem;
     border-bottom: 1px solid var(--rule-light);
-    margin-bottom: 3.5rem;
+    margin-bottom: 2rem;
 }
 .splash-title {
     font-family: 'Cormorant Garamond', Georgia, serif !important;
@@ -740,22 +796,14 @@ document.addEventListener('keydown', function(e) {
 </script>
 """, unsafe_allow_html=True)
 
-# ── Masthead (shown on all phases except splash) ──────────────────────────────
-if st.session_state.phase != "splash":
-    st.markdown("""
-    <div class="masthead">
-        <p class="masthead-eyebrow">Shopping Intelligence — Vol. I</p>
-        <p class="masthead-title">Un<em>stuck.</em></p>
-        <p class="masthead-sub">Stop deliberating. Let the research happen.</p>
-    </div>
-    """, unsafe_allow_html=True)
+# ── No masthead on inner pages ────────────────────────────────────────────────
 
 # ── Phase strip ───────────────────────────────────────────────────────────────
-_phase_order  = ["splash", "intake_target", "intake_questions", "curation", "ranking", "scoring", "choice", "deals"]
+_phase_order  = ["splash", "intake_target", "intake_options", "curation", "ranking", "scoring", "choice", "deals"]
 _phase_labels = {
     "splash":           "I — Diagnosis",
     "intake_target":    "I — Diagnosis",
-    "intake_questions": "I — Diagnosis",
+    "intake_options":   "I — Diagnosis",
     "curation":         "II — Search",
     "ranking":          "III — Ranking",
     "scoring":          "IV — Results",
@@ -958,14 +1006,12 @@ def render_drag_rank(factors_list):
 if st.session_state.phase == "splash":
     st.markdown("""
     <div class="splash-hero">
-        <p class="masthead-eyebrow">Shopping Intelligence — Vol. I</p>
         <h1 class="splash-title">Un<em>stuck.</em></h1>
         <p class="splash-deck">You've been thinking about buying it for weeks.<br>We'll end that in five minutes.</p>
     </div>
     """, unsafe_allow_html=True)
 
     st.markdown("""
-    <div class="splash-divider"></div>
     <p class="splash-how-label">How it works</p>
     <div class="splash-steps">
         <div class="splash-step">
@@ -997,7 +1043,6 @@ if st.session_state.phase == "splash":
             </div>
         </div>
     </div>
-    <div class="splash-divider"></div>
     """, unsafe_allow_html=True)
 
     if st.button("Start →"):
@@ -1008,7 +1053,7 @@ if st.session_state.phase == "splash":
 elif st.session_state.phase == "intake_target":
     render_phase_strip("intake_target")
     st.markdown('<span class="section-label">What are you buying?</span>', unsafe_allow_html=True)
-    st.markdown('<p class="body-text">Name the thing you keep putting off. Be as specific or vague as you like — we\'ll narrow it down together.</p>', unsafe_allow_html=True)
+    st.markdown('<p class="body-text">Name the thing you keep putting off. Be as specific or vague as you like.</p>', unsafe_allow_html=True)
 
     with st.form("intake_form", clear_on_submit=False):
         target = st.text_input(
@@ -1019,41 +1064,158 @@ elif st.session_state.phase == "intake_target":
         submitted = st.form_submit_button("Begin →")
 
     if submitted and target:
+        st.session_state.intake_target = target
         st.session_state.chat_history.append({"role": "USER", "message": f"I want to buy: {target}"})
-        prompt = ("You are an efficient personal shopper. Look at the chat history and ask ONE "
-                  "direct, targeted question to narrow down the user's preferences (e.g., budget, "
-                  "dealbreakers, style). Do not offer options yet. Just ask the question.")
+        prompt = (
+            f"The user wants to buy: {target}. "
+            "Generate exactly 8 short, distinct preference options a buyer of this product might care about. "
+            "Examples for a laptop: Good battery life, Lightweight & portable, Fast performance, Great display, Budget-friendly, Gaming capable, Business/professional, Long-lasting build quality. "
+            "Return ONLY a JSON array of 8 strings, no markdown, no intro. Just the array."
+        )
         with st.spinner("Thinking…"):
-            question = ask_cohere(prompt)
-            st.session_state.chat_history.append({"role": "CHATBOT", "message": question})
-        st.session_state.phase = "intake_questions"
+            raw = ask_cohere(prompt, temp=0.4)
+            clean = raw.replace("```json", "").replace("```", "").strip()
+            try:
+                import json as _json
+                opts = _json.loads(clean)
+                if not isinstance(opts, list):
+                    raise ValueError
+                st.session_state.intake_options = [str(o) for o in opts[:8]]
+            except Exception:
+                st.session_state.intake_options = ["Budget-friendly", "High performance", "Good build quality",
+                                                    "Lightweight", "Long battery life", "Easy to use",
+                                                    "Stylish design", "Latest features"]
+        st.session_state.selected_options = []
+        st.session_state.phase = "intake_options"
         st.rerun()
 
-# ── Phase: intake_questions ───────────────────────────────────────────────────
-elif st.session_state.phase == "intake_questions":
-    render_phase_strip("intake_questions")
-    st.markdown('<span class="section-label">A few quick questions</span>', unsafe_allow_html=True)
-    for msg in st.session_state.chat_history:
-        if msg["message"].startswith("I want to buy:"):
-            st.chat_message("user").write(msg["message"])
-        elif msg["role"] == "USER":
-            st.chat_message("user").write(msg["message"])
-        else:
-            st.chat_message("assistant").write(msg["message"])
-    user_answer = st.chat_input("Your answer…")
-    if user_answer:
-        st.session_state.chat_history.append({"role": "USER", "message": user_answer})
-        st.session_state.question_count += 1
-        if st.session_state.question_count < MAX_QUESTIONS:
-            prompt = ("You are an efficient personal shopper. Look at the chat history and ask ONE "
-                      "direct, targeted follow-up question to narrow down preferences. No options yet.")
-            with st.spinner("Thinking…"):
-                question = ask_cohere(prompt)
-                st.session_state.chat_history.append({"role": "CHATBOT", "message": question})
-            st.rerun()
-        else:
-            st.session_state.phase = "curation"
-            st.rerun()
+# ── Phase: intake_options ─────────────────────────────────────────────────────
+elif st.session_state.phase == "intake_options":
+    render_phase_strip("intake_options")
+    st.markdown('<span class="section-label">What matters to you?</span>', unsafe_allow_html=True)
+    st.markdown(f'<p class="body-text">Select everything that applies for your <strong>{st.session_state.intake_target}</strong>.</p>', unsafe_allow_html=True)
+
+    opts = st.session_state.intake_options
+    opts_json = json.dumps(opts)
+
+    chips_component = f"""
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  body {{ background: transparent; font-family: 'DM Sans', sans-serif; padding: 4px 0; }}
+  .grid {{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }}
+  .chip {{
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border: 1px solid #C8C2B8;
+    cursor: pointer;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 300;
+    color: #2E2B24;
+    background: #F7F4EE;
+    transition: background 0.12s, border-color 0.12s, color 0.12s;
+    user-select: none;
+    -webkit-user-select: none;
+  }}
+  .chip:hover {{ background: #F0EBE1; border-color: #6B6559; }}
+  .chip.on {{
+    background: #141210;
+    color: #F7F4EE;
+    border-color: #141210;
+  }}
+  .check {{ font-size: 11px; opacity: 0; transition: opacity 0.1s; }}
+  .chip.on .check {{ opacity: 1; }}
+</style>
+</head>
+<body>
+<div class="grid" id="grid"></div>
+<script>
+(function() {{
+  var opts = {opts_json};
+  var selected = {{}};
+  var grid = document.getElementById('grid');
+
+  opts.forEach(function(label, i) {{
+    var chip = document.createElement('div');
+    chip.className = 'chip';
+    chip.id = 'chip-' + i;
+    chip.innerHTML = '<span class="check">✓</span>' + label;
+    chip.addEventListener('click', function() {{
+      if (selected[i]) {{
+        delete selected[i];
+        chip.classList.remove('on');
+      }} else {{
+        selected[i] = true;
+        chip.classList.add('on');
+      }}
+      var keys = Object.keys(selected).join(',');
+      var stInput = window.parent.document.querySelector('input[aria-label="chip_bridge"]');
+      if (stInput) {{
+        var setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+        setter.call(stInput, keys);
+        stInput.dispatchEvent(new Event('input', {{ bubbles: true }}));
+      }}
+    }});
+    grid.appendChild(chip);
+  }});
+}})();
+</script>
+</body>
+</html>
+"""
+    st.components.v1.html(chips_component, height=120, scrolling=False)
+
+    # Hidden bridge input
+    st.markdown("""<style>
+    div[data-testid="stTextInput"]:has(input[aria-label="chip_bridge"]) {
+        position: absolute !important; opacity: 0 !important;
+        pointer-events: none !important; height: 0 !important; overflow: hidden !important;
+    }
+    </style>""", unsafe_allow_html=True)
+    chip_bridge = st.text_input("chip_bridge", value="", label_visibility="hidden", key="chip_bridge")
+
+    st.markdown('<span class="section-label" style="margin-top:1rem;display:block;">Anything else?</span>', unsafe_allow_html=True)
+    other_text = st.text_input(
+        "Other preferences",
+        placeholder="e.g. must work with macOS, under $800…",
+        label_visibility="hidden",
+        key="other_pref"
+    )
+
+    if st.button("Find my options →"):
+        chosen = []
+        if chip_bridge:
+            for idx_str in chip_bridge.split(","):
+                idx_str = idx_str.strip()
+                if idx_str.isdigit():
+                    i = int(idx_str)
+                    if 0 <= i < len(opts):
+                        chosen.append(opts[i])
+        if other_text.strip():
+            chosen.append(other_text.strip())
+        if not chosen:
+            chosen = ["No specific preferences stated"]
+        prefs_str = ", ".join(chosen)
+        st.session_state.chat_history.append({
+            "role": "USER",
+            "message": f"My preferences for {st.session_state.intake_target}: {prefs_str}"
+        })
+        st.session_state.selected_options = chosen
+        st.session_state.phase = "curation"
+        st.rerun()
+
 
 # ── Phase: curation ───────────────────────────────────────────────────────────
 elif st.session_state.phase == "curation":
@@ -1155,57 +1317,131 @@ Return ONLY valid JSON in this format:
 elif st.session_state.phase == "choice":
     render_phase_strip("choice")
     st.markdown('<span class="section-label">Your top three matches</span>', unsafe_allow_html=True)
-    st.markdown('<p class="body-text">Here are your best options, scored against your priorities. Review the details, then choose one to find the best deals.</p>', unsafe_allow_html=True)
+    st.markdown('<p class="body-text">Click a column to select it, then hit Continue.</p>', unsafe_allow_html=True)
 
+    products = st.session_state.final_products
     rank_labels = ["First choice", "Runner-up", "Third option"]
-    numerals = ["I", "II", "III"]
 
-    for i, p in enumerate(st.session_state.final_products):
-        stats = p.get("stats", [])
-        stats_html = ""
-        if stats:
-            stats_items = "".join([
-                f'<div class="stat-item"><span class="stat-label">{s["label"]}</span>'
-                f'<span class="stat-value">{s["value"]}</span></div>'
-                for s in stats
-            ])
-            stats_html = f'<div class="choice-stats">{stats_items}</div>'
+    def clean_price(p):
+        v = (p.get("price") or "").strip()
+        return "" if v.lower() in ("not specified", "n/a", "none", "") else v
 
-        pros = p.get("pros", "")
-        cons = p.get("cons", "")
-        best_for = p.get("best_for", "")
+    p_json_str = json.dumps([{
+        "rank": rank_labels[i],
+        "name": p["name"],
+        "price": clean_price(p),
+        "reason": p.get("reason", ""),
+        "pros": p.get("pros", ""),
+        "cons": p.get("cons", ""),
+        "best_for": p.get("best_for", ""),
+        "stats": p.get("stats", []),
+    } for i, p in enumerate(products)])
 
-        details_rows = ""
-        if pros:
-            details_rows += f'<div class="choice-detail-row"><span class="choice-detail-label">Strengths</span><span>{pros}</span></div>'
-        if cons:
-            details_rows += f'<div class="choice-detail-row"><span class="choice-detail-label">Tradeoffs</span><span>{cons}</span></div>'
-        if best_for:
-            details_rows += f'<div class="choice-detail-row"><span class="choice-detail-label">Best for</span><span>{best_for}</span></div>'
+    # ── Streamlit-component bridge (replaces broken JS→hidden-input approach) ──
+    # The card UI is rendered inside an iframe (st.components.v1.html). The
+    # parent-document querySelector trick only works when both frames share the
+    # same origin; on Streamlit Cloud / newer Streamlit versions the iframe is
+    # sandboxed, so the write silently fails and Streamlit never sees the update.
+    #
+    # Fix: use Streamlit's official postMessage channel via
+    # Streamlit.setComponentValue(), which is always available inside component
+    # iframes.  We read the value with st.components.v1.declare_component inline
+    # by switching to a bidirectional component — but the simplest drop-in fix
+    # is to render the card purely for display and add three visible "Choose"
+    # buttons below it using normal st.button(), which always trigger a rerun.
 
-        details_html = f'<div class="choice-details">{details_rows}</div>' if details_rows else ""
+    html_top = """<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;1,300;1,400&family=DM+Sans:wght@200;300;400&family=Martian+Mono:wght@300;400&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { background: #F7F4EE; font-family: 'DM Sans', sans-serif; -webkit-font-smoothing: antialiased; }
+.hint { font-family: 'Martian Mono', monospace; font-size: 9px; letter-spacing: 0.16em; text-transform: uppercase; color: #A89F93; padding-bottom: 14px; display: block; }
+.compare-wrap { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid #D4CEC4; }
+.cell { padding: 20px 18px; border-right: 1px solid #D4CEC4; border-bottom: 1px solid #D4CEC4; background: #F7F4EE; position: relative; }
+.cell:nth-child(3n) { border-right: none; }
+.rank { font-family: 'Martian Mono', monospace; font-size: 9px; letter-spacing: 0.18em; text-transform: uppercase; color: #8C7A5E; display: block; margin-bottom: 6px; }
+.pname { font-family: 'Cormorant Garamond', Georgia, serif; font-size: 22px; font-weight: 400; color: #141210; line-height: 1.15; margin-bottom: 6px; }
+.price { font-family: 'Martian Mono', monospace; font-size: 11px; color: #6B6559; font-weight: 300; letter-spacing: 0.04em; margin-bottom: 10px; display: block; }
+.reason { font-family: 'Cormorant Garamond', serif; font-style: italic; font-size: 13px; color: #6B6559; line-height: 1.6; clear: both; }
+.detail-cell { padding: 14px 18px; border-right: 1px solid #D4CEC4; border-bottom: 1px solid #D4CEC4; background: #F7F4EE; }
+.detail-cell:nth-child(3n) { border-right: none; }
+.no-bottom { border-bottom: none !important; }
+.detail-label { font-family: 'Martian Mono', monospace; font-size: 8px; letter-spacing: 0.16em; text-transform: uppercase; color: #A89F93; display: block; margin-bottom: 5px; }
+.detail-val { font-family: 'DM Sans', sans-serif; font-size: 13px; color: #2E2B24; font-weight: 300; line-height: 1.5; }
+</style>
+</head>
+<body>
+<span class="hint">↓ Choose a product below to continue</span>
+<div class="compare-wrap" id="grid"></div>
+<script>
+(function() {
+  var products = """
 
-        border_accent = "2px solid var(--ink)" if i == 0 else "2px solid var(--rule-light)"
+    html_mid = """;
+  var grid = document.getElementById('grid');
 
-        st.markdown(f"""
-        <div class="choice-card" style="border-left:{border_accent};">
-            <div class="choice-card-header">
-                <div class="choice-card-meta">
-                    <span class="choice-rank">{rank_labels[i]}</span>
-                    <p class="choice-name">{p['name']}</p>
-                </div>
-                <span class="choice-price">{p['price']}</span>
-            </div>
-            <p class="choice-reason">{p['reason']}</p>
-            {details_html}
-            {stats_html}
-        </div>
-        """, unsafe_allow_html=True)
+  function addRow(buildFn, extraClass, noBottom) {
+    [0,1,2].forEach(function(i) {
+      var el = document.createElement('div');
+      el.className = extraClass + (noBottom ? ' no-bottom' : '');
+      buildFn(el, products[i], i);
+      grid.appendChild(el);
+    });
+  }
 
-        if st.button(f"Find deals for this →", key=f"choose_{i}"):
-            st.session_state.chosen_product = p
-            st.session_state.phase = "deals"
-            st.rerun()
+  addRow(function(el, p, i) {
+    el.innerHTML =
+      '<span class="rank">' + p.rank + '</span>' +
+      '<p class="pname">' + p.name + '</p>' +
+      (p.price ? '<span class="price">' + p.price + '</span>' : '') +
+      '<p class="reason">' + p.reason + '</p>';
+  }, 'cell');
+
+  var detailRows = [
+    { label: 'Strengths', key: 'pros' },
+    { label: 'Tradeoffs', key: 'cons' },
+    { label: 'Best for',  key: 'best_for' }
+  ];
+  var stats = products[0].stats || [];
+
+  detailRows.forEach(function(row, ri) {
+    var isLast = ri === detailRows.length - 1 && stats.length === 0;
+    addRow(function(el, p, i) {
+      el.innerHTML =
+        '<span class="detail-label">' + row.label + '</span>' +
+        '<span class="detail-val">' + (p[row.key] || '\u2014') + '</span>';
+    }, 'detail-cell', isLast);
+  });
+
+  stats.forEach(function(s, si) {
+    var isLast = si === stats.length - 1;
+    addRow(function(el, p, i) {
+      var st = (p.stats && p.stats[si]) || s;
+      el.innerHTML =
+        '<span class="detail-label">' + st.label + '</span>' +
+        '<span class="detail-val">' + st.value + '</span>';
+    }, 'detail-cell', isLast);
+  });
+})();
+</script>
+</body>
+</html>"""
+
+    card_component = html_top + p_json_str + html_mid
+    st.components.v1.html(card_component, height=900, scrolling=True)
+
+    # ── Native Streamlit buttons — these always trigger a rerun reliably ───────
+    cols = st.columns(3)
+    for i, (col, p) in enumerate(zip(cols, products)):
+        with col:
+            label = f"Choose: {p['name']}"
+            if st.button(label, key=f"choose_{i}", use_container_width=True):
+                st.session_state.chosen_product = products[i]
+                st.session_state.phase = "deals"
+                st.rerun()
 
 # ── Phase: deals ──────────────────────────────────────────────────────────────
 elif st.session_state.phase == "deals":
@@ -1215,11 +1451,8 @@ elif st.session_state.phase == "deals":
     if "deal_results" not in st.session_state:
         st.markdown('<span class="section-label">Hunting for deals…</span>', unsafe_allow_html=True)
         with st.spinner("Searching the web for the best prices…"):
-            deal_query = f"{chosen['name']} best price discount buy online"
-            st.session_state.deal_results = (
-                tavily.search(query=deal_query, search_depth="basic").get("results", [])[:5]
-            )
-        st.rerun()
+            st.session_state.deal_results = fetch_deals(chosen['name'])
+        # st.rerun() has been deliberately removed here so it flows straight to the UI
 
     st.markdown('<span class="section-label">Best deals found</span>', unsafe_allow_html=True)
     st.markdown(
